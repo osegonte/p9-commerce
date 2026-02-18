@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -14,6 +15,17 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const navItems = [
+    { label: "New Arrivals", href: "/new-arrivals" },
+    { label: "Hoodies", href: "/hoodies" },
+    { label: "Tees", href: "/tees" },
+    { label: "Headwear", href: "/headwear" },
+    { label: "Accessories", href: "/accessories" },
+    { label: "Lookbook", href: "/lookbook" },
+  ];
+
+  const iconColor = scrolled ? "text-black" : "text-white";
+
   return (
     <>
       <header
@@ -23,44 +35,43 @@ export default function Header() {
             : "bg-transparent"
         }`}
       >
-        <div className="mx-10 sm:mx-14 lg:mx-24 xl:mx-28 flex items-center justify-between h-14 sm:h-16">
+        <div className="px-6 sm:px-10 lg:px-28 xl:px-40 flex items-center justify-between h-14 sm:h-16">
+
           {/* ── Left: Menu ── */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center gap-2.5 group"
-              aria-label="Toggle menu"
-            >
-              <div className="flex flex-col justify-center gap-[5px] w-5 h-5">
-                <span
-                  className={`block h-[1.5px] w-full transition-all duration-300 origin-center ${
-                    scrolled ? "bg-black" : "bg-white"
-                  } ${menuOpen ? "rotate-45 translate-y-[6.5px]" : ""}`}
-                />
-                <span
-                  className={`block h-[1.5px] w-full transition-all duration-300 ${
-                    scrolled ? "bg-black" : "bg-white"
-                  } ${menuOpen ? "opacity-0" : "opacity-100"}`}
-                />
-                <span
-                  className={`block h-[1.5px] w-full transition-all duration-300 origin-center ${
-                    scrolled ? "bg-black" : "bg-white"
-                  } ${menuOpen ? "-rotate-45 -translate-y-[6.5px]" : ""}`}
-                />
-              </div>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex items-center gap-2.5"
+            aria-label="Toggle menu"
+          >
+            <div className="flex flex-col justify-center gap-[5px] w-5 h-5">
               <span
-                className={`text-[11px] tracking-[0.15em] uppercase font-light hidden sm:inline transition-colors duration-500 ${
-                  scrolled ? "text-black" : "text-white"
-                }`}
-              >
-                menu
-              </span>
-            </button>
-          </div>
+                className={`block h-[1.5px] w-full transition-all duration-300 origin-center ${
+                  scrolled ? "bg-black" : "bg-white"
+                } ${menuOpen ? "rotate-45 translate-y-[6.5px]" : ""}`}
+              />
+              <span
+                className={`block h-[1.5px] w-full transition-all duration-300 ${
+                  scrolled ? "bg-black" : "bg-white"
+                } ${menuOpen ? "opacity-0" : "opacity-100"}`}
+              />
+              <span
+                className={`block h-[1.5px] w-full transition-all duration-300 origin-center ${
+                  scrolled ? "bg-black" : "bg-white"
+                } ${menuOpen ? "-rotate-45 -translate-y-[6.5px]" : ""}`}
+              />
+            </div>
+            <span
+              className={`text-[11px] tracking-[0.15em] uppercase font-light hidden sm:inline transition-colors duration-500 ${
+                scrolled ? "text-black" : "text-white"
+              }`}
+            >
+              menu
+            </span>
+          </button>
 
           {/* ── Center: Logo ── */}
           <div className="absolute left-1/2 -translate-x-1/2">
-            <a href="/" className="block">
+            <Link href="/" className="block">
               <svg
                 viewBox="0 0 120 32"
                 className={`h-5 sm:h-6 w-auto transition-colors duration-500 ${
@@ -81,52 +92,51 @@ export default function Header() {
                   NYNT
                 </text>
               </svg>
-            </a>
+            </Link>
           </div>
 
           {/* ── Right: Icons ── */}
           <div className="flex items-center gap-5 sm:gap-6">
-            <a
+            {/* Contact — desktop only */}
+            <Link
               href="/contact"
-              className={`text-[11px] tracking-[0.15em] uppercase font-light hidden lg:inline transition-colors duration-500 ${
-                scrolled ? "text-black" : "text-white"
-              }`}
+              className={`text-[11px] tracking-[0.15em] uppercase font-light hidden lg:inline transition-colors duration-500 ${iconColor}`}
             >
               contact
-            </a>
+            </Link>
 
-            <button
-              className={`lg:hidden transition-colors duration-500 ${
-                scrolled ? "text-black" : "text-white"
-              }`}
+            {/* Contact icon — mobile only */}
+            <Link
+              href="/contact"
+              className={`lg:hidden transition-colors duration-500 ${iconColor}`}
               aria-label="Contact"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-[18px] h-[18px]">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
               </svg>
-            </button>
+            </Link>
 
-            <button
-              className={`transition-colors duration-500 ${
-                scrolled ? "text-black" : "text-white"
-              }`}
+            {/* Account — links to /login */}
+            <Link
+              href="/login"
+              className={`transition-colors duration-500 ${iconColor}`}
               aria-label="Account"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-[18px] h-[18px] sm:w-5 sm:h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
               </svg>
-            </button>
+            </Link>
 
-            <button
-              className={`transition-colors duration-500 relative ${
-                scrolled ? "text-black" : "text-white"
-              }`}
+            {/* Cart — links to /cart */}
+            <Link
+              href="/cart"
+              className={`transition-colors duration-500 relative ${iconColor}`}
               aria-label="Cart"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-[18px] h-[18px] sm:w-5 sm:h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
               </svg>
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -137,19 +147,11 @@ export default function Header() {
           menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
       >
-        <nav className="flex flex-col justify-center items-start h-full mx-10 sm:mx-14 lg:mx-24 xl:mx-28">
-          {[
-            "New Arrivals",
-            "Hoodies",
-            "Tees",
-            "Headwear",
-            "Shoes",
-            "Accessories",
-            "Lookbook",
-          ].map((item, i) => (
-            <a
-              key={item}
-              href={`/${item.toLowerCase().replace(/\s+/g, "-")}`}
+        <nav className="flex flex-col justify-center items-start h-full px-6 sm:px-10 lg:px-28 xl:px-40">
+          {navItems.map((item, i) => (
+            <Link
+              key={item.label}
+              href={item.href}
               className="text-white text-3xl sm:text-4xl lg:text-5xl font-light tracking-wide py-3 sm:py-4 hover:opacity-50 transition-all duration-300"
               style={{
                 transitionDelay: menuOpen ? `${i * 60}ms` : "0ms",
@@ -158,18 +160,18 @@ export default function Header() {
               }}
               onClick={() => setMenuOpen(false)}
             >
-              {item}
-            </a>
+              {item.label}
+            </Link>
           ))}
 
           <div className="mt-12 pt-8 border-t border-white/20 w-full">
-            <a
+            <Link
               href="/contact"
               className="text-white/60 text-sm tracking-[0.15em] uppercase font-light hover:text-white transition-colors duration-300"
               onClick={() => setMenuOpen(false)}
             >
               Contact Us
-            </a>
+            </Link>
           </div>
         </nav>
       </div>
