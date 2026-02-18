@@ -1,42 +1,44 @@
 @import "tailwindcss";
 
-/* ── Base Reset ── */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ── Base Reset — inside @layer base so Tailwind utilities can override it ── */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-body {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  background: #ffffff;
-  color: #0a0a0a;
-  overflow-x: hidden;
-}
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #ffffff;
+    color: #0a0a0a;
+    overflow-x: hidden;
+  }
 
-/* ── Selection ── */
-::selection {
-  background: #0a0a0a;
-  color: #ffffff;
-}
+  /* ── Selection ── */
+  ::selection {
+    background: #0a0a0a;
+    color: #ffffff;
+  }
 
-/* ── Scrollbar (minimal) ── */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #a3a3a3;
+  /* ── Scrollbar (minimal) ── */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d4d4d4;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a3a3a3;
+  }
 }
