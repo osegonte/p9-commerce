@@ -21,7 +21,7 @@ export const SHOP_CATEGORIES: { slug: ShopCategory; label: string }[] = [
 interface ShopPageProps {
   category: ShopCategory;
   // products will come from Supabase — passed in from each page.tsx
-  products?: import("@/components/ProductGrid").Product[];
+  products?: import("@/lib/products").DBProduct[];
 }
 
 export default function ShopPage({ category, products = [] }: ShopPageProps) {
@@ -60,7 +60,7 @@ export default function ShopPage({ category, products = [] }: ShopPageProps) {
       </section>
 
       {/* ── Grid — swap products={[]} for Supabase data when ready ── */}
-      <ProductGrid products={products} />
+      <ProductGrid products={products} title={category} />
 
       <Footer />
     </>
