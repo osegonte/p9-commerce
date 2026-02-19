@@ -1,12 +1,17 @@
+// FILE: src/app/tees/page.tsx
+
 import Header from "@/components/Header";
 import ProductGrid from "@/components/ProductGrid";
 import Footer from "@/components/sections/Footer";
+import { getProductsByCategory } from "@/lib/products";
 
-export default function TeesPage() {
+export default async function TeesPage() {
+  const products = await getProductsByCategory("Tees");
   return (
     <>
-      <Header />
-      <ProductGrid title="Tees" products={[]} />
+      <Header alwaysDark />
+      <div className="h-14 sm:h-16" />
+      <ProductGrid title="Tees" products={products} />
       <Footer />
     </>
   );

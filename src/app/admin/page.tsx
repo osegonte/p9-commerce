@@ -1,3 +1,4 @@
+// FILE: src/app/admin/page.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -7,6 +8,15 @@ import { supabase } from "@/lib/supabase";
 
 const CATEGORIES = ["Hoodies", "Tees", "Headwear", "Accessories", "Shoes", "New Arrivals"];
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+
+// 3 labeled image slots — Front, Side, Back
+const IMAGE_SLOTS = [
+  { key: "front", label: "Front" },
+  { key: "side",  label: "Side"  },
+  { key: "back",  label: "Back"  },
+] as const;
+type SlotKey = typeof IMAGE_SLOTS[number]["key"];
+
 type Tab = "products" | "admins";
 
 interface Product {
@@ -37,54 +47,51 @@ const emptyForm = {
   in_stock: true,
 };
 
+// Per-slot state
+type SlotState = {
+  file: File | null;
+  preview: string | null;
+  existingUrl: string | null; // when editing
+};
+const emptySlots = (): Record<SlotKey, SlotState> => ({
+  front: { file: null, preview: null, existingUrl: null },
+  side:  { file: null, preview: null, existingUrl: null },
+  back:  { file: null, preview: null, existingUrl: null },
+});
+
 export default function AdminPage() {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRefs = useRef<Record<SlotKey, HTMLInputElement | null>>({
+    front: null, side: null, back: null,
+  });
 
   const [authorized, setAuthorized] = useState(false);
   const [checking, setChecking] = useState(true);
   const [currentEmail, setCurrentEmail] = useState("");
   const [tab, setTab] = useState<Tab>("products");
 
-  // Products state
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [slots, setSlots] = useState<Record<SlotKey, SlotState>>(emptySlots());
   const [productLoading, setProductLoading] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
   const [productSuccess, setProductSuccess] = useState<string | null>(null);
   const [formView, setFormView] = useState(false);
 
-  // Admins state
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
 
-  // Auth + admin check
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.push("/login"); return; }
-
       const email = session.user.email ?? "";
       setCurrentEmail(email);
-
-      // Check if this email is in the admins table
-      const { data } = await supabase
-        .from("admins")
-        .select("email")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (!data) {
-        // Not an admin — kick back to home
-        router.push("/");
-        return;
-      }
-
+      const { data } = await supabase.from("admins").select("email").eq("email", email).maybeSingle();
+      if (!data) { router.push("/"); return; }
       setAuthorized(true);
       setChecking(false);
       fetchProducts();
@@ -93,26 +100,29 @@ export default function AdminPage() {
   }, [router]);
 
   const fetchProducts = async () => {
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
     if (data) setProducts(data);
   };
-
   const fetchAdmins = async () => {
-    const { data } = await supabase
-      .from("admins")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const { data } = await supabase.from("admins").select("*").order("created_at", { ascending: true });
     if (data) setAdmins(data);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSlotChange = (slotKey: SlotKey, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setSlots((prev) => ({
+      ...prev,
+      [slotKey]: { file, preview: URL.createObjectURL(file), existingUrl: prev[slotKey].existingUrl },
+    }));
+  };
+
+  const clearSlot = (slotKey: SlotKey) => {
+    setSlots((prev) => ({
+      ...prev,
+      [slotKey]: { file: null, preview: null, existingUrl: null },
+    }));
+    if (fileRefs.current[slotKey]) fileRefs.current[slotKey]!.value = "";
   };
 
   const slugify = (str: string) =>
@@ -121,9 +131,7 @@ export default function AdminPage() {
   const handleSizeToggle = (size: string) => {
     setForm((prev) => ({
       ...prev,
-      sizes: prev.sizes.includes(size)
-        ? prev.sizes.filter((s) => s !== size)
-        : [...prev.sizes, size],
+      sizes: prev.sizes.includes(size) ? prev.sizes.filter((s) => s !== size) : [...prev.sizes, size],
     }));
   };
 
@@ -134,17 +142,25 @@ export default function AdminPage() {
     setProductSuccess(null);
 
     try {
-      let imageUrl: string | null = null;
+      // Upload any new files and collect final URLs in slot order
+      const imageUrls: string[] = [];
 
-      if (imageFile) {
-        const ext = imageFile.name.split(".").pop();
-        const filename = `${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("products")
-          .upload(filename, imageFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from("products").getPublicUrl(filename);
-        imageUrl = urlData.publicUrl;
+      for (const slot of IMAGE_SLOTS) {
+        const state = slots[slot.key];
+        if (state.file) {
+          const ext = state.file.name.split(".").pop();
+          const filename = `${Date.now()}-${slot.key}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("products")
+            .upload(filename, state.file, { upsert: true });
+          if (uploadError) throw uploadError;
+          const { data: urlData } = supabase.storage.from("products").getPublicUrl(filename);
+          imageUrls.push(urlData.publicUrl);
+        } else if (state.existingUrl) {
+          // Keep existing URL when editing without replacing
+          imageUrls.push(state.existingUrl);
+        }
+        // if neither file nor existingUrl → slot is empty, skip
       }
 
       const slug = slugify(form.name);
@@ -156,7 +172,7 @@ export default function AdminPage() {
         sizes: form.sizes,
         slug,
         in_stock: form.in_stock,
-        ...(imageUrl && { images: [imageUrl] }),
+        images: imageUrls,
       };
 
       if (editingId) {
@@ -164,21 +180,28 @@ export default function AdminPage() {
         if (error) throw error;
         setProductSuccess("Product updated.");
       } else {
-        const { error } = await supabase.from("products").insert({ ...payload, images: imageUrl ? [imageUrl] : [] });
+        const { error } = await supabase.from("products").insert(payload);
         if (error) throw error;
         setProductSuccess("Product added.");
       }
 
-      setForm(emptyForm);
-      setImageFile(null);
-      setImagePreview(null);
-      setEditingId(null);
-      setFormView(false);
+      resetForm();
       fetchProducts();
     } catch (err: unknown) {
       setProductError(err instanceof Error ? err.message : "Something went wrong.");
     }
     setProductLoading(false);
+  };
+
+  const resetForm = () => {
+    setForm(emptyForm);
+    setSlots(emptySlots());
+    setEditingId(null);
+    setFormView(false);
+    // Clear all file inputs
+    (Object.keys(fileRefs.current) as SlotKey[]).forEach((k) => {
+      if (fileRefs.current[k]) fileRefs.current[k]!.value = "";
+    });
   };
 
   const handleEdit = (product: Product) => {
@@ -190,7 +213,16 @@ export default function AdminPage() {
       sizes: product.sizes || [],
       in_stock: product.in_stock,
     });
-    setImagePreview(product.images?.[0] || null);
+
+    // Map existing images back into slots by index
+    const newSlots = emptySlots();
+    IMAGE_SLOTS.forEach((slot, i) => {
+      if (product.images?.[i]) {
+        newSlots[slot.key] = { file: null, preview: product.images[i], existingUrl: product.images[i] };
+      }
+    });
+    setSlots(newSlots);
+
     setEditingId(product.id);
     setFormView(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -211,13 +243,8 @@ export default function AdminPage() {
       email: newAdminEmail.trim().toLowerCase(),
       created_by: currentEmail,
     });
-    if (error) {
-      setAdminError(error.message);
-    } else {
-      setAdminSuccess(`${newAdminEmail} is now an admin.`);
-      setNewAdminEmail("");
-      fetchAdmins();
-    }
+    if (error) { setAdminError(error.message); }
+    else { setAdminSuccess(`${newAdminEmail} is now an admin.`); setNewAdminEmail(""); fetchAdmins(); }
     setAdminLoading(false);
   };
 
@@ -247,30 +274,20 @@ export default function AdminPage() {
       <div className="bg-white border-b border-neutral-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <span className="text-[13px] tracking-[0.2em] uppercase text-[#1a1a1a] font-medium">
-              NYNTH Admin
-            </span>
-            <button
-              onClick={() => { setTab("products"); setFormView(false); setEditingId(null); setForm(emptyForm); setImagePreview(null); }}
-              className={`text-[12px] tracking-[0.1em] uppercase transition-colors duration-200 ${tab === "products" ? "text-[#1a1a1a]" : "text-[#aaa] hover:text-[#1a1a1a]"}`}
-            >
+            <span className="text-[13px] tracking-[0.2em] uppercase text-[#1a1a1a] font-medium">NYNTH Admin</span>
+            <button onClick={() => { setTab("products"); resetForm(); }}
+              className={`text-[12px] tracking-[0.1em] uppercase transition-colors duration-200 ${tab === "products" ? "text-[#1a1a1a]" : "text-[#aaa] hover:text-[#1a1a1a]"}`}>
               Products
             </button>
-            <button
-              onClick={() => setTab("admins")}
-              className={`text-[12px] tracking-[0.1em] uppercase transition-colors duration-200 ${tab === "admins" ? "text-[#1a1a1a]" : "text-[#aaa] hover:text-[#1a1a1a]"}`}
-            >
+            <button onClick={() => setTab("admins")}
+              className={`text-[12px] tracking-[0.1em] uppercase transition-colors duration-200 ${tab === "admins" ? "text-[#1a1a1a]" : "text-[#aaa] hover:text-[#1a1a1a]"}`}>
               Admins
             </button>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-[11px] text-[#aaa] hidden sm:block">{currentEmail}</span>
-            <a href="/" target="_blank" className="text-[11px] text-[#aaa] hover:text-[#1a1a1a] transition-colors duration-200 tracking-wide">
-              View Site ↗
-            </a>
-            <button onClick={handleSignOut} className="text-[11px] text-[#aaa] hover:text-[#1a1a1a] transition-colors duration-200 tracking-wide uppercase">
-              Sign Out
-            </button>
+            <a href="/" target="_blank" className="text-[11px] text-[#aaa] hover:text-[#1a1a1a] transition-colors duration-200 tracking-wide">View Site ↗</a>
+            <button onClick={handleSignOut} className="text-[11px] text-[#aaa] hover:text-[#1a1a1a] transition-colors duration-200 tracking-wide uppercase">Sign Out</button>
           </div>
         </div>
       </div>
@@ -280,36 +297,93 @@ export default function AdminPage() {
         {/* ── PRODUCTS TAB ── */}
         {tab === "products" && (
           <>
-            {/* Add / Edit Form */}
             {formView && (
               <div className="bg-white border border-neutral-200 p-8 mb-10">
                 <h2 className="text-[16px] font-medium text-[#1a1a1a] mb-8 tracking-wide">
                   {editingId ? "Edit Product" : "New Product"}
                 </h2>
-                <form onSubmit={handleProductSubmit} className="space-y-6">
 
-                  {/* Image upload */}
+                <form onSubmit={handleProductSubmit} className="space-y-8">
+
+                  {/* ── Image slots ── */}
                   <div>
-                    <label className="block text-[11px] tracking-[0.2em] uppercase text-[#8a8580] mb-3">Product Image</label>
-                    <div
-                      onClick={() => fileRef.current?.click()}
-                      className="border border-dashed border-neutral-300 rounded cursor-pointer hover:border-neutral-500 transition-colors duration-200 overflow-hidden"
-                      style={{ aspectRatio: "3/4", maxWidth: "200px" }}
-                    >
-                      {imagePreview ? (
-                        <div className="relative w-full h-full">
-                          <Image src={imagePreview} alt="Preview" fill className="object-cover" unoptimized />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[#aaa]">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-8 h-8">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                          </svg>
-                          <span className="text-[11px] tracking-wide">Upload image</span>
-                        </div>
-                      )}
+                    <label className="block text-[11px] tracking-[0.2em] uppercase text-[#8a8580] mb-4">
+                      Product Images
+                    </label>
+                    <p className="text-[11px] text-[#aaa] mb-4 -mt-2">
+                      Upload up to 4 views. First image is shown in the shop grid.
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-3 max-w-sm">
+                      {IMAGE_SLOTS.map((slot) => {
+                        const state = slots[slot.key];
+                        const hasImage = state.preview !== null;
+
+                        return (
+                          <div key={slot.key} className="flex flex-col gap-2">
+                            {/* Label */}
+                            <span className="text-[10px] tracking-[0.2em] uppercase text-[#aaa]">
+                              {slot.label}
+                            </span>
+
+                            {/* Upload box */}
+                            <div
+                              onClick={() => !hasImage && fileRefs.current[slot.key]?.click()}
+                              className={`relative border border-dashed overflow-hidden transition-colors duration-200 ${
+                                hasImage
+                                  ? "border-neutral-300 cursor-default"
+                                  : "border-neutral-300 hover:border-neutral-500 cursor-pointer"
+                              }`}
+                              style={{ aspectRatio: "3/4" }}
+                            >
+                              {hasImage ? (
+                                <>
+                                  <Image
+                                    src={state.preview!}
+                                    alt={slot.label}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                  {/* Remove overlay */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); clearSlot(slot.key); }}
+                                    className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 text-white text-[11px] flex items-center justify-center hover:bg-black/80 transition-colors"
+                                  >
+                                    ✕
+                                  </button>
+                                  {/* Replace overlay on hover */}
+                                  <div
+                                    onClick={() => fileRefs.current[slot.key]?.click()}
+                                    className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-200 cursor-pointer flex items-end justify-center pb-3"
+                                  >
+                                    <span className="text-white text-[10px] tracking-wide opacity-0 hover:opacity-100 bg-black/50 px-2 py-1">
+                                      Replace
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[#bbb]">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-6 h-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                  </svg>
+                                  <span className="text-[10px] tracking-wide">Add</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <input
+                              ref={(el) => { fileRefs.current[slot.key] = el; }}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleSlotChange(slot.key, e)}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
-                    <input ref={fileRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                   </div>
 
                   {/* Name + Price */}
@@ -324,7 +398,7 @@ export default function AdminPage() {
                       <label className="block text-[11px] tracking-[0.2em] uppercase text-[#8a8580] mb-2">Price (₦)</label>
                       <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
                         className="w-full border border-neutral-200 px-4 py-3 text-[14px] text-[#1a1a1a] outline-none focus:border-[#1a1a1a] transition-colors duration-200 bg-white"
-                        placeholder="89.00" step="0.01" min="0" required />
+                        placeholder="25000" step="0.01" min="0" required />
                     </div>
                   </div>
 
@@ -351,14 +425,18 @@ export default function AdminPage() {
                     <div className="flex gap-2 flex-wrap">
                       {SIZES.map((size) => (
                         <button key={size} type="button" onClick={() => handleSizeToggle(size)}
-                          className={`w-12 h-12 border text-[13px] transition-colors duration-200 ${form.sizes.includes(size) ? "border-[#1a1a1a] bg-[#1a1a1a] text-white" : "border-neutral-200 text-[#6b6560] hover:border-neutral-400"}`}>
+                          className={`w-12 h-12 border text-[13px] transition-colors duration-200 ${
+                            form.sizes.includes(size)
+                              ? "border-[#1a1a1a] bg-[#1a1a1a] text-white"
+                              : "border-neutral-200 text-[#6b6560] hover:border-neutral-400"
+                          }`}>
                           {size}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* In stock */}
+                  {/* In stock toggle */}
                   <div className="flex items-center gap-3">
                     <button type="button" onClick={() => setForm({ ...form, in_stock: !form.in_stock })}
                       className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${form.in_stock ? "bg-[#1a1a1a]" : "bg-neutral-300"}`}>
@@ -375,7 +453,7 @@ export default function AdminPage() {
                       className="bg-[#1a1a1a] text-white px-8 py-3 text-[12px] tracking-[0.15em] uppercase hover:bg-[#333] transition-colors duration-300 disabled:opacity-50">
                       {productLoading ? "Saving..." : editingId ? "Update Product" : "Add Product"}
                     </button>
-                    <button type="button" onClick={() => { setFormView(false); setEditingId(null); setForm(emptyForm); setImagePreview(null); }}
+                    <button type="button" onClick={resetForm}
                       className="border border-neutral-200 text-[#6b6560] px-8 py-3 text-[12px] tracking-[0.15em] uppercase hover:border-neutral-400 transition-colors duration-300">
                       Cancel
                     </button>
@@ -384,14 +462,13 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Product list */}
             {!formView && (
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-[16px] font-medium text-[#1a1a1a] tracking-wide">
                     Products <span className="text-[#aaa] font-normal text-[14px]">({products.length})</span>
                   </h2>
-                  <button onClick={() => { setFormView(true); setEditingId(null); setForm(emptyForm); setImagePreview(null); }}
+                  <button onClick={() => { setFormView(true); resetForm(); setEditingId(null); }}
                     className="bg-[#1a1a1a] text-white px-6 py-2.5 text-[11px] tracking-[0.15em] uppercase hover:bg-[#333] transition-colors duration-300">
                     + Add Product
                   </button>
@@ -409,10 +486,11 @@ export default function AdminPage() {
                   <div className="space-y-[1px] bg-neutral-200">
                     <div className="bg-[#f8f8f8] grid grid-cols-12 gap-4 px-6 py-3">
                       <div className="col-span-1" />
-                      <div className="col-span-4 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Name</div>
+                      <div className="col-span-3 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Name</div>
                       <div className="col-span-2 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Category</div>
                       <div className="col-span-2 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Price</div>
-                      <div className="col-span-2 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Stock</div>
+                      <div className="col-span-2 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Images</div>
+                      <div className="col-span-1 text-[10px] tracking-[0.2em] uppercase text-[#aaa]">Stock</div>
                       <div className="col-span-1" />
                     </div>
                     {products.map((product) => (
@@ -426,7 +504,7 @@ export default function AdminPage() {
                             )}
                           </div>
                         </div>
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <p className="text-[14px] text-[#1a1a1a] font-light">{product.name}</p>
                           <p className="text-[11px] text-[#aaa] mt-0.5">{product.slug}</p>
                         </div>
@@ -434,11 +512,24 @@ export default function AdminPage() {
                           <span className="text-[11px] tracking-[0.1em] uppercase text-[#6b6560]">{product.category}</span>
                         </div>
                         <div className="col-span-2">
-                          <span className="text-[14px] text-[#1a1a1a]">₦{Number(product.price).toFixed(2)}</span>
+                          <span className="text-[14px] text-[#1a1a1a]">₦{Number(product.price).toLocaleString()}</span>
                         </div>
                         <div className="col-span-2">
+                          {/* Show tiny thumbnails of all uploaded images */}
+                          <div className="flex gap-1">
+                            {(product.images ?? []).slice(0, 4).map((img, i) => (
+                              <div key={i} className="relative w-6 h-8 bg-neutral-100 overflow-hidden shrink-0">
+                                <Image src={img} alt="" fill className="object-cover" unoptimized />
+                              </div>
+                            ))}
+                            {(!product.images || product.images.length === 0) && (
+                              <span className="text-[11px] text-[#ccc]">None</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-span-1">
                           <span className={`text-[11px] tracking-[0.1em] uppercase ${product.in_stock ? "text-green-600" : "text-red-400"}`}>
-                            {product.in_stock ? "In Stock" : "Out of Stock"}
+                            {product.in_stock ? "In Stock" : "Out"}
                           </span>
                         </div>
                         <div className="col-span-1 flex items-center justify-end gap-3">
@@ -466,19 +557,12 @@ export default function AdminPage() {
         {tab === "admins" && (
           <div className="max-w-xl">
             <h2 className="text-[16px] font-medium text-[#1a1a1a] mb-8 tracking-wide">Manage Admins</h2>
-
-            {/* Add admin form */}
             <div className="bg-white border border-neutral-200 p-6 mb-6">
               <p className="text-[11px] tracking-[0.2em] uppercase text-[#8a8580] mb-4">Add New Admin</p>
               <form onSubmit={handleAddAdmin} className="flex gap-3">
-                <input
-                  type="email"
-                  value={newAdminEmail}
-                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                <input type="email" value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)}
                   className="flex-1 border border-neutral-200 px-4 py-3 text-[14px] text-[#1a1a1a] outline-none focus:border-[#1a1a1a] transition-colors duration-200"
-                  placeholder="email@example.com"
-                  required
-                />
+                  placeholder="email@example.com" required />
                 <button type="submit" disabled={adminLoading}
                   className="bg-[#1a1a1a] text-white px-6 py-3 text-[12px] tracking-[0.15em] uppercase hover:bg-[#333] transition-colors duration-300 disabled:opacity-50 shrink-0">
                   {adminLoading ? "..." : "Add"}
@@ -487,8 +571,6 @@ export default function AdminPage() {
               {adminError && <p className="text-red-500 text-[13px] mt-3">{adminError}</p>}
               {adminSuccess && <p className="text-green-600 text-[13px] mt-3">{adminSuccess}</p>}
             </div>
-
-            {/* Admin list */}
             <div className="space-y-[1px] bg-neutral-200">
               {admins.map((admin) => (
                 <div key={admin.id} className="bg-white px-6 py-4 flex items-center justify-between">

@@ -1,92 +1,88 @@
-"use client";
+// FILE: src/app/product/[slug]/page.tsx
 
-import { useState } from "react";
-import Image from "next/image";
+import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/sections/Footer";
+import ProductGallery from "@/components/ProductGallery";
+import AddToCartButton from "@/components/AddToCartButton";
+import { getProductBySlug } from "@/lib/products";
 
-export default function ProductPage() {
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const sizes = ["S", "M", "L", "XL", "XXL"];
+interface Props {
+  params: Promise<{ slug: string }>;
+}
+
+export default async function ProductPage({ params }: Props) {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
+
+  if (!product) notFound();
 
   return (
     <>
-      <Header />
-      <section className="bg-white pt-24 pb-16 sm:pb-20">
-        <div className="mx-10 sm:mx-14 lg:mx-24 xl:mx-28">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+      <Header alwaysDark />
 
-            {/* Images */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="relative aspect-[3/4] bg-neutral-100 col-span-2">
-                <Image
-                  src="/placeholder-product.jpg"
-                  alt="Product"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              <div className="relative aspect-[3/4] bg-neutral-100">
-                <Image
-                  src="/placeholder-product.jpg"
-                  alt="Product"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              <div className="relative aspect-[3/4] bg-neutral-100">
-                <Image
-                  src="/placeholder-product.jpg"
-                  alt="Product"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            </div>
+      <section className="bg-white pt-14 sm:pt-16 pb-16 sm:pb-24">
+        <div className="px-6 sm:px-10 lg:px-16 xl:px-20 pt-8 sm:pt-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-start">
 
-            {/* Details */}
-            <div className="lg:sticky lg:top-24 lg:self-start">
+            {/* ── Left: Image gallery ── */}
+            <ProductGallery
+              images={product.images ?? []}
+              name={product.name}
+            />
+
+            {/* ── Right: Product info ── */}
+            <div className="lg:sticky lg:top-24">
+
+              {/* Category breadcrumb */}
               <p className="text-[#8a8580] text-[11px] tracking-[0.25em] uppercase mb-3">
-                Hoodies
+                {product.category}
               </p>
-              <h1 className="text-[#1a1a1a] text-2xl sm:text-3xl font-semibold mb-2">
-                Product Name
+
+              {/* Name */}
+              <h1 className="text-[#1a1a1a] text-[26px] sm:text-[30px] font-light leading-[1.2] mb-3">
+                {product.name}
               </h1>
-              <p className="text-[#1a1a1a] text-lg mb-8">€129.00</p>
 
-              <p className="text-[#8a8580] text-[11px] tracking-[0.2em] uppercase mb-3">
-                Size
+              {/* Price */}
+              <p className="text-[#1a1a1a] text-[18px] mb-8 font-light">
+                ₦{Number(product.price).toLocaleString()}
               </p>
-              <div className="flex gap-2 mb-8">
-                {sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`w-12 h-12 border text-[13px] transition-colors duration-200 ${
-                      selectedSize === size
-                        ? "border-[#1a1a1a] text-[#1a1a1a]"
-                        : "border-neutral-200 text-[#6b6560] hover:border-neutral-400"
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
 
-              <button className="w-full bg-[#1a1a1a] text-white py-4 text-[13px] tracking-[0.15em] uppercase hover:bg-[#333] transition-colors duration-300 mb-4">
-                Add to Cart
-              </button>
-
-              <div className="mt-10 border-t border-neutral-100 pt-8">
-                <p className="text-[#1a1a1a] text-[14px] font-semibold mb-3">Details</p>
-                <p className="text-[#6b6560] text-[14px] leading-[1.8] font-light">
-                  Premium quality streetwear crafted with attention to detail. Built to last, designed to stand out.
+              {/* Out of stock badge */}
+              {!product.in_stock && (
+                <p className="inline-block text-[11px] tracking-[0.15em] uppercase text-red-400 border border-red-200 px-3 py-1 mb-6">
+                  Out of stock
                 </p>
-              </div>
+              )}
+
+              {/* Size selector + Add to Cart (client component) */}
+              <AddToCartButton product={product} />
+
+              {/* Divider */}
+              <div className="h-px bg-neutral-100 my-8" />
+
+              {/* Description */}
+              {product.description && (
+                <div className="mb-6">
+                  <p className="text-[11px] tracking-[0.2em] uppercase text-[#8a8580] mb-3">Details</p>
+                  <p className="text-[#6b6560] text-[14px] leading-[1.9] font-light">
+                    {product.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Sizes available (read-only summary) */}
+              {product.sizes?.length > 0 && (
+                <p className="text-[11px] text-[#aaa] tracking-[0.1em]">
+                  Available: {product.sizes.join(", ")}
+                </p>
+              )}
             </div>
           </div>
         </div>
       </section>
+
       <Footer />
     </>
   );
