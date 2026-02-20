@@ -62,6 +62,7 @@ const accordionSections = [
       { label: "Hoodies", href: "/hoodies" },
       { label: "Tees", href: "/tees" },
       { label: "Headwear", href: "/headwear" },
+      { label: "About Nynth World", href: "/about" },
     ],
   },
   {
